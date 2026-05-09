@@ -74,3 +74,5 @@ ode --check web/game.js, ./gradlew.bat compileDebugKotlin --rerun-tasks, Playwri
 - 2026-05-09 개인정보처리방침 HTML 작성: Google Play 등록용 개인정보처리방침 초안을 `web/privacy-policy.html`과 `docs/legal/privacy-policy.html`에 추가. AdMob 광고 ID, Google Play Billing 구매 처리, 로컬 게임 저장 데이터, 삭제 방법, 아동 개인정보, 문의처 항목을 포함. 개발자 이메일은 실제 공개 연락처로 교체 필요.
 
 - 2026-05-09 개인정보처리방침 GitHub 배포 준비: `web/privacy-policy.html`, `docs/legal/privacy-policy.html`, 배포 저장소 사본의 문의 이메일을 `hhy0111@hotmail.com`으로 교체. `output/ai-core-rebirth-privacy`에 `index.html`과 `privacy-policy.html`만 포함한 별도 Git 저장소를 만들고 `https://github.com/hhy0111/ai-core-rebirth-privacy.git`의 `main` 브랜치로 푸시. raw 파일 접근은 200 응답 확인, GitHub Pages는 아직 API 기준 404라 저장소 Settings > Pages에서 `main` / root 배포 설정 필요.
+
+- 2026-05-09 전체 소스 GitHub 업로드: 사용자가 요청해 기존 `https://github.com/hhy0111/ai-core-rebirth-privacy.git` 저장소를 개인정보처리방침 전용이 아니라 전체 프로젝트 저장소로 확장. `.gitignore`, `.gitattributes`, `README.md`를 추가하고 Android 소스, 웹 프로토타입, 문서, 이미지 자산, Gradle wrapper, 도구 스크립트를 `main` 브랜치에 푸시. `app/build`, `output`, `.gradle`, `.kotlin`, `local.properties`, APK/AAB/서명 키는 제외.
