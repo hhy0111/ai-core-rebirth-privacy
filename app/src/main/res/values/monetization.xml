@@ -1,0 +1,12 @@
+<resources>
+    <!--
+        Production AdMob IDs for AI Core Rebirth.
+        Register test devices in AdMob before local testing to avoid invalid traffic.
+    -->
+    <string name="admob_app_id">ca-app-pub-4402708884038037~8835999992</string>
+    <string name="admob_rewarded_production_boost">ca-app-pub-4402708884038037/2987181050</string>
+    <string name="admob_rewarded_offline_double">ca-app-pub-4402708884038037/2466032766</string>
+    <string name="admob_rewarded_event_reward">ca-app-pub-4402708884038037/1152951090</string>
+    <string name="admob_rewarded_restore_speed">ca-app-pub-4402708884038037/6157865769</string>
+    <string name="admob_rewarded_free_chest">ca-app-pub-4402708884038037/4844784094</string>
+</resources>

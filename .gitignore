@@ -1,0 +1,34 @@
+# Gradle / Android build output
+.gradle/
+.kotlin/
+**/build/
+
+# Local IDE and machine files
+.idea/
+*.iml
+local.properties
+.DS_Store
+Thumbs.db
+
+# Generated verification output
+output/
+
+# Node / web generated output
+node_modules/
+dist/
+coverage/
+
+# Release artifacts and signing material
+*.apk
+*.aab
+*.apks
+*.keystore
+*.jks
+*.p12
+*.pem
+*.key
+
+# Logs and temporary files
+*.log
+*.tmp
+*.bak
