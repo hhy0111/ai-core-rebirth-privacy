@@ -126,6 +126,7 @@ data class GameState(
     val activeEventIndex: Int? = null,
     val eventRewardBoosts: Int = 0,
     val adBoostUntilEpochMs: Long = 0L,
+    val selectedPlanetSkinId: String = "default",
     val lastSavedEpochMs: Long = 0L,
 ) {
     fun stage(balance: GameBalance = GameBalance): PlanetStage {

@@ -30,7 +30,7 @@ enum class StoreProduct(
     REMOVE_ADS(
         productId = "remove_ads",
         title = "광고 제거",
-        designIntent = "향후 강제 광고 제거, 보상형 광고는 선택 유지",
+        designIntent = "보상형 광고 보상을 광고 시청 없이 즉시 수령",
         fallbackPrice = "₩3,900",
         purchaseKind = PurchaseKind.NON_CONSUMABLE,
     ),
@@ -63,7 +63,7 @@ enum class StoreProduct(
     PLANET_SKIN_PACK(
         productId = "planet_skin_pack",
         title = "행성 스킨 패키지",
-        designIntent = "행성 외형 변경 권한",
+        designIntent = "행성 외형과 에너지 오라 스킨 3종 해금",
         fallbackPrice = "₩3,900",
         purchaseKind = PurchaseKind.NON_CONSUMABLE,
     ),

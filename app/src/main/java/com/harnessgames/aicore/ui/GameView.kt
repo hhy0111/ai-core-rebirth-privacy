@@ -67,9 +67,16 @@ class GameView(
     private var travelMapDragDistance = 0f
     private var screenTransition: ScreenTransition? = null
     private val describedPanels = mutableSetOf<Panel>()
+    private val instantRewardLastClaimMs = mutableMapOf<RewardedPlacement, Long>()
     private val handler = Handler(Looper.getMainLooper())
     private val touchTargets = mutableListOf<TouchTarget>()
     private val bitmapCache = mutableMapOf<Int, Bitmap>()
+    private val planetSkins = listOf(
+        PlanetSkinChoice("default", "기본 복원", "기본 행성 복원 외형", 98, 242, 255, "planet_skin_default_restore"),
+        PlanetSkinChoice("life_neon", "네온 생명", "초록 생명 오라와 꽃가루 입자", 114, 245, 128, "planet_skin_life_neon"),
+        PlanetSkinChoice("industrial_forge", "산업 코어", "황금 회로와 기계 위성 효과", 255, 215, 90, "planet_skin_industrial_forge"),
+        PlanetSkinChoice("combat_void", "전투 균열", "자주색 균열과 붉은 방어막", 255, 95, 155, "planet_skin_combat_void"),
+    )
 
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val stroke = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -445,10 +452,16 @@ class GameView(
         val radius = min(width * 0.28f, height * 0.17f)
         val stage = state.stage()
         val visualStats = currentVisualStats()
+        val skin = activePlanetSkin()
         val pulse = ((SystemClock.elapsedRealtime() % 1600L).toFloat() / 1600f)
         val spin = ((SystemClock.elapsedRealtime() % 9000L).toFloat() / 9000f) * 360f
 
-        fill.color = Color.argb((70 + pulse * 60 + visualStats.intensity * 36f).toInt().coerceIn(50, 180), 98, 242, 255)
+        fill.color = Color.argb(
+            (70 + pulse * 60 + visualStats.intensity * 36f).toInt().coerceIn(50, 180),
+            skin.red,
+            skin.green,
+            skin.blue,
+        )
         canvas.drawCircle(cx, cy, radius * (1.35f + pulse * 0.08f + visualStats.visualTier * 0.035f), fill)
         canvas.save()
         canvas.rotate(spin, cx, cy)
@@ -469,13 +482,16 @@ class GameView(
         )
         canvas.restore()
         drawPlanetVisualProgression(canvas, cx, cy, radius, visualStats, spin, false)
+        drawPlanetSkinAura(canvas, cx, cy, radius, skin, false)
         drawEnergyParticles(canvas, cx, cy, radius, visualStats)
+        val skinImageRes = planetSkinImageRes(skin)
         drawBitmapCenterCrop(
             canvas,
-            planetStageRes(stage),
+            if (skinImageRes != 0) skinImageRes else planetStageRes(stage),
             RectF(cx - radius * 1.24f, cy - radius * 1.24f, cx + radius * 1.24f, cy + radius * 1.24f),
         )
         drawPlanetDetails(canvas, cx, cy, radius, stage)
+        drawPlanetSkinAura(canvas, cx, cy, radius, skin, true)
         drawPlanetVisualProgression(canvas, cx, cy, radius, visualStats, spin, true)
         drawPlanetUpgradePulse(canvas, cx, cy, radius)
         drawResourceStreams(canvas, cx, cy, radius, visualStats)
@@ -731,7 +747,7 @@ class GameView(
         text.textAlign = Paint.Align.CENTER
         text.color = Color.WHITE
         text.textSize = sp(7.5f)
-        canvas.drawText("탭 보상", encounter.x, label.top + dp(12.5f), text)
+        canvas.drawText(if (hasAdSkipPass()) "즉시 x3" else "광고 x3", encounter.x, label.top + dp(12.5f), text)
         text.textAlign = Paint.Align.LEFT
         touchTargets += TouchTarget(RectF(encounter.x - size * 0.58f, encounter.y - size * 0.58f, encounter.x + size * 0.58f, encounter.y + size * 0.58f)) {
             collectPassingEncounter()
@@ -755,15 +771,21 @@ class GameView(
 
     private fun collectPassingEncounter() {
         val encounter = passingEncounter ?: return
-        val reward = encounterReward(encounter.def)
+        claimRewardedBenefit(RewardedPlacement.ENCOUNTER_CLAIM) {
+            grantPassingEncounter(encounter)
+        }
+    }
+
+    private fun grantPassingEncounter(encounter: PassingEncounter) {
+        val reward = encounterReward(encounter.def) * ENCOUNTER_REWARD_MULTIPLIER
         val progressDelta = if (encounter.def.type == EncounterRewardType.RIFT) {
-            GameBalance.planets[state.planetIndex].stageThresholds.last() * 0.025
+            GameBalance.planets[state.planetIndex].stageThresholds.last() * 0.025 * ENCOUNTER_PROGRESS_MULTIPLIER
         } else {
             0.0
         }
         state = engine.grantResources(state, reward, progressDelta = progressDelta)
         startIncomeFloater(reward, encounter.def.title, encounter.x, encounter.y)
-        startRewardBurst(encounter.def.title, walletText(reward))
+        startRewardBurst("${encounter.def.title} x3", walletText(reward))
         encounterBurst = EncounterBurst(
             x = encounter.x,
             y = encounter.y,
@@ -971,6 +993,20 @@ class GameView(
             else -> "조건 3: 항로 안정화 남은 ${formatDuration(waitSeconds)}"
         }
         canvas.drawText(timeLine.take(48), statusBounds.left + dp(10f), statusBounds.top + dp(81f), text)
+        if (next != null && !nextUnlocked) {
+            val supplyBounds = RectF(statusBounds.right - dp(116f), statusBounds.top + dp(8f), statusBounds.right - dp(8f), statusBounds.top + dp(38f))
+            drawButton(canvas, supplyBounds, true)
+            text.textAlign = Paint.Align.CENTER
+            text.color = Color.WHITE
+            text.textSize = sp(9.2f)
+            canvas.drawText(if (hasAdSkipPass()) "즉시 보급" else "광고 보급", supplyBounds.centerX(), supplyBounds.top + dp(19f), text)
+            text.textAlign = Paint.Align.LEFT
+            touchTargets += TouchTarget(supplyBounds) {
+                claimRewardedBenefit(RewardedPlacement.TRAVEL_SUPPLY) {
+                    grantTravelSupply()
+                }
+            }
+        }
 
         drawGalaxyNodes(canvas, top + dp(198f), bottom - dp(68f))
         val bounds = RectF(dp(24f), bottom - dp(58f), width - dp(24f), bottom - dp(14f))
@@ -1259,17 +1295,18 @@ class GameView(
         canvas.drawText(label, iconBounds.right + dp(8f), bounds.top + dp(16f), text)
         text.color = Color.rgb(160, 246, 255)
         text.textSize = sp(8.4f)
-        canvas.drawText(detail.take(50), iconBounds.right + dp(8f), bounds.top + dp(32f), text)
-        val status = if (adsController.isReady(placement)) "준비" else "로딩"
+        val shownDetail = if (hasAdSkipPass()) {
+            detail.replace("가격: 광고 시청", "광고 제거 보유")
+        } else {
+            detail
+        }
+        canvas.drawText(shownDetail.take(50), iconBounds.right + dp(8f), bounds.top + dp(32f), text)
+        val status = rewardStatusLabel(placement)
         text.textAlign = Paint.Align.RIGHT
         canvas.drawText(status, bounds.right - dp(8f), bounds.top + dp(21f), text)
         text.textAlign = Paint.Align.LEFT
         touchTargets += TouchTarget(bounds) {
-            adsController.showRewarded(
-                placement = placement,
-                onReward = onReward,
-                onUnavailable = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() },
-            )
+            claimRewardedBenefit(placement, onReward)
         }
     }
 
@@ -1284,20 +1321,38 @@ class GameView(
         canvas.drawText(product.title, iconBounds.right + dp(8f), bounds.top + dp(14f), text)
         text.color = Color.rgb(160, 246, 255)
         text.textSize = sp(8.4f)
-        canvas.drawText(productRewardText(product).take(48), iconBounds.right + dp(8f), bounds.top + dp(31f), text)
+        val rewardLine = if (product == StoreProduct.PLANET_SKIN_PACK && owned) {
+            "적용 중: ${activePlanetSkin().title} / 탭하여 변경"
+        } else {
+            productRewardText(product)
+        }
+        canvas.drawText(rewardLine.take(48), iconBounds.right + dp(8f), bounds.top + dp(31f), text)
         text.color = if (owned) Color.rgb(114, 245, 128) else Color.rgb(255, 215, 90)
         text.textSize = sp(10f)
-        val price = if (owned) "보유" else billingController.priceLabel(product)
+        val price = if (owned && product == StoreProduct.PLANET_SKIN_PACK) {
+            "변경"
+        } else if (owned) {
+            "보유"
+        } else {
+            billingController.priceLabel(product)
+        }
         text.textAlign = Paint.Align.RIGHT
         canvas.drawText(price, bounds.right - dp(8f), bounds.top + dp(21f), text)
         text.textAlign = Paint.Align.LEFT
         touchTargets += TouchTarget(bounds) {
-            billingController.purchase(product)
+            if (product == StoreProduct.PLANET_SKIN_PACK && owned) {
+                cyclePlanetSkin()
+            } else {
+                billingController.purchase(product)
+            }
         }
     }
 
     private fun applyPurchasedProduct(product: StoreProduct) {
         val before = state
+        if (product == StoreProduct.PLANET_SKIN_PACK && state.selectedPlanetSkinId == "default") {
+            state = state.copy(selectedPlanetSkinId = "life_neon")
+        }
         state = engine.grantResources(
             state = state,
             reward = product.reward,
@@ -1602,6 +1657,8 @@ class GameView(
     }
 
     private fun productRewardText(product: StoreProduct): String {
+        if (product == StoreProduct.REMOVE_ADS) return "보상형 광고 보상 즉시 수령"
+        if (product == StoreProduct.PLANET_SKIN_PACK) return "행성 스킨 3종 해금"
         val parts = mutableListOf<String>()
         val wallet = walletText(product.reward)
         if (wallet != "외형/편의 해금") parts += wallet
@@ -1885,6 +1942,8 @@ class GameView(
         RewardedPlacement.EVENT_REWARD -> R.drawable.reward_ad_event_bonus
         RewardedPlacement.RESTORE_SPEED -> R.drawable.reward_ad_restore_speed
         RewardedPlacement.FREE_CHEST -> R.drawable.reward_ad_free_chest
+        RewardedPlacement.TRAVEL_SUPPLY -> R.drawable.icon_nav_travel
+        RewardedPlacement.ENCOUNTER_CLAIM -> R.drawable.reward_ad_free_chest
     }
 
     private fun productIconRes(product: StoreProduct): Int = when (product) {
@@ -1939,6 +1998,160 @@ class GameView(
         UpgradeEffect.RESTORE_SPEED -> R.drawable.fx_restore_wave
         UpgradeEffect.TAP_POWER -> R.drawable.fx_tap_resonance_core
         else -> R.drawable.fx_upgrade_burst
+    }
+
+    private fun hasAdSkipPass(): Boolean = billingController.hasEntitlement(StoreProduct.REMOVE_ADS)
+
+    private fun claimRewardedBenefit(placement: RewardedPlacement, onReward: () -> Unit) {
+        if (hasAdSkipPass()) {
+            val remainingMs = instantRewardCooldownRemainingMs(placement)
+            if (remainingMs > 0L) {
+                Toast.makeText(context, "즉시 보상 대기 ${formatCooldown(remainingMs)}", Toast.LENGTH_SHORT).show()
+                return
+            }
+            markInstantRewardClaimed(placement)
+            onReward()
+            Toast.makeText(context, "광고 제거 패스: 보상 즉시 지급", Toast.LENGTH_SHORT).show()
+            return
+        }
+        adsController.showRewarded(
+            placement = placement,
+            onReward = onReward,
+            onUnavailable = { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() },
+        )
+    }
+
+    private fun rewardStatusLabel(placement: RewardedPlacement): String {
+        if (hasAdSkipPass()) {
+            val remainingMs = instantRewardCooldownRemainingMs(placement)
+            return if (remainingMs > 0L) formatCooldown(remainingMs) else "즉시"
+        }
+        return if (adsController.isReady(placement)) "준비" else "로딩"
+    }
+
+    private fun instantRewardCooldownRemainingMs(placement: RewardedPlacement): Long {
+        val cooldownMs = instantRewardCooldownMs(placement)
+        if (cooldownMs <= 0L) return 0L
+        val lastClaimedMs = instantRewardLastClaimMs[placement] ?: return 0L
+        return (cooldownMs - (SystemClock.elapsedRealtime() - lastClaimedMs)).coerceAtLeast(0L)
+    }
+
+    private fun markInstantRewardClaimed(placement: RewardedPlacement) {
+        if (instantRewardCooldownMs(placement) > 0L) {
+            instantRewardLastClaimMs[placement] = SystemClock.elapsedRealtime()
+        }
+    }
+
+    private fun instantRewardCooldownMs(placement: RewardedPlacement): Long = when (placement) {
+        RewardedPlacement.OFFLINE_DOUBLE -> 0L
+        RewardedPlacement.PRODUCTION_BOOST -> 60_000L
+        RewardedPlacement.RESTORE_SPEED -> 120_000L
+        RewardedPlacement.EVENT_REWARD -> 180_000L
+        RewardedPlacement.FREE_CHEST -> 120_000L
+        RewardedPlacement.ENCOUNTER_CLAIM -> 30_000L
+        RewardedPlacement.TRAVEL_SUPPLY -> 10L * 60L * 1000L
+    }
+
+    private fun grantTravelSupply() {
+        val reward = travelSupplyReward()
+        val progressDelta = GameBalance.planets[state.planetIndex].stageThresholds.last() * 0.025
+        state = engine.grantResources(state, reward, progressDelta = progressDelta)
+        persistNow()
+        startRewardBurst("항로 보급 획득", walletText(reward))
+        startScreenTransition("항로 보급 투입", panelAccent(Panel.TRAVEL))
+        Toast.makeText(context, "이동 준비 보급 획득", Toast.LENGTH_SHORT).show()
+        invalidate()
+    }
+
+    private fun travelSupplyReward(): ResourceWallet {
+        val production = engine.productionPerSecond(state)
+        val travelCost = GameBalance.planets[state.planetIndex].travelCost
+        val planetFactor = (state.planetIndex + 1).toDouble()
+        val timedReward = production * 900.0
+        val costAssist = travelCost * 0.12
+        return ResourceWallet(
+            energy = maxOf(700.0 * planetFactor, timedReward.energy, costAssist.energy),
+            biomass = maxOf(24.0 * planetFactor, timedReward.biomass, costAssist.biomass),
+            aiData = maxOf(10.0 * planetFactor, timedReward.aiData, costAssist.aiData),
+        )
+    }
+
+    private fun activePlanetSkin(): PlanetSkinChoice {
+        if (!billingController.hasEntitlement(StoreProduct.PLANET_SKIN_PACK)) return planetSkins.first()
+        return planetSkins.firstOrNull { it.id == state.selectedPlanetSkinId } ?: planetSkins.first()
+    }
+
+    private fun cyclePlanetSkin() {
+        if (!billingController.hasEntitlement(StoreProduct.PLANET_SKIN_PACK)) {
+            billingController.purchase(StoreProduct.PLANET_SKIN_PACK)
+            return
+        }
+        val currentIndex = planetSkins.indexOfFirst { it.id == activePlanetSkin().id }.coerceAtLeast(0)
+        val next = planetSkins[(currentIndex + 1) % planetSkins.size]
+        state = state.copy(selectedPlanetSkinId = next.id)
+        persistNow()
+        startRewardBurst("스킨 적용", next.title)
+        startScreenTransition("${next.title} 스킨 적용", Color.rgb(next.red, next.green, next.blue))
+        Toast.makeText(context, "${next.title} 스킨 적용", Toast.LENGTH_SHORT).show()
+        invalidate()
+    }
+
+    private fun planetSkinImageRes(skin: PlanetSkinChoice): Int {
+        if (skin.id == "default") return 0
+        return resources.getIdentifier(skin.imageResourceName, "drawable", context.packageName)
+    }
+
+    private fun drawPlanetSkinAura(
+        canvas: Canvas,
+        cx: Float,
+        cy: Float,
+        radius: Float,
+        skin: PlanetSkinChoice,
+        foreground: Boolean,
+    ) {
+        if (skin.id == "default") return
+        val time = SystemClock.elapsedRealtime().toFloat() / 1000f
+        val accent = Color.rgb(skin.red, skin.green, skin.blue)
+        if (!foreground) {
+            for (i in 0 until 3) {
+                val pulse = 0.5f + 0.5f * sin(time * (1.2f + i * 0.25f) + i)
+                stroke.color = colorWithAlpha(accent, (70 + pulse * 80).toInt())
+                stroke.strokeWidth = dp(1.4f + i * 0.5f)
+                canvas.drawCircle(cx, cy, radius * (1.52f + i * 0.16f + pulse * 0.04f), stroke)
+            }
+            return
+        }
+
+        when (skin.id) {
+            "life_neon" -> {
+                fill.color = colorWithAlpha(accent, 155)
+                for (i in 0 until 14) {
+                    val theta = i * 2.399f + time * 0.45f
+                    val x = cx + cos(theta) * radius * (0.22f + (i % 5) * 0.11f)
+                    val y = cy + sin(theta) * radius * (0.15f + (i % 4) * 0.08f)
+                    canvas.drawCircle(x, y, dp(2.1f + (i % 3) * 0.8f), fill)
+                }
+            }
+            "industrial_forge" -> {
+                stroke.color = colorWithAlpha(accent, 190)
+                stroke.strokeWidth = dp(2f)
+                for (i in 0 until 5) {
+                    drawArcLine(canvas, cx, cy, radius * (0.45f + i * 0.11f), i * 54f + time * 20f, 34f, accent)
+                }
+            }
+            "combat_void" -> {
+                stroke.color = colorWithAlpha(accent, 185)
+                stroke.strokeWidth = dp(2.4f)
+                for (i in 0 until 7) {
+                    val a = i * 0.92f + time * 0.32f
+                    val sx = cx + cos(a) * radius * 0.2f
+                    val sy = cy + sin(a) * radius * 0.12f
+                    val ex = cx + cos(a + 0.22f) * radius * 0.78f
+                    val ey = cy + sin(a + 0.22f) * radius * 0.58f
+                    canvas.drawLine(sx, sy, ex, ey, stroke)
+                }
+            }
+        }
     }
 
     private fun currentVisualStats(): VisualStats {
@@ -2018,6 +2231,15 @@ class GameView(
         }
     }
 
+    private fun formatCooldown(milliseconds: Long): String {
+        val seconds = ((milliseconds + 999L) / 1000L).coerceAtLeast(0L)
+        return if (seconds >= 60L) {
+            "${seconds / 60L}분"
+        } else {
+            "${seconds}초"
+        }
+    }
+
     private fun showChangeToast(changed: Boolean, success: String, failure: String) {
         Toast.makeText(context, if (changed) success else failure, Toast.LENGTH_SHORT).show()
     }
@@ -2037,6 +2259,16 @@ class GameView(
     private fun dp(value: Float): Float = value * resources.displayMetrics.density
 
     private fun sp(value: Float): Float = value * resources.displayMetrics.scaledDensity
+
+    private data class PlanetSkinChoice(
+        val id: String,
+        val title: String,
+        val description: String,
+        val red: Int,
+        val green: Int,
+        val blue: Int,
+        val imageResourceName: String,
+    )
 
     private data class TouchTarget(
         val bounds: RectF,
@@ -2139,6 +2371,9 @@ class GameView(
     }
 
     companion object {
+        private const val ENCOUNTER_REWARD_MULTIPLIER = 3.0
+        private const val ENCOUNTER_PROGRESS_MULTIPLIER = 2.0
+
         fun formatNumber(value: Double): String {
             return when {
                 value >= 1_000_000.0 -> String.format(Locale.US, "%.1fm", value / 1_000_000.0)

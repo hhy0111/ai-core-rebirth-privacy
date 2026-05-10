@@ -36,6 +36,7 @@ class SaveRepository(context: Context) {
                 activeEventIndex = if (json.has("activeEventIndex")) json.optInt("activeEventIndex") else null,
                 eventRewardBoosts = json.optInt("eventRewardBoosts", 0),
                 adBoostUntilEpochMs = json.optLong("adBoostUntilEpochMs", 0L),
+                selectedPlanetSkinId = json.optString("selectedPlanetSkinId", "default"),
                 lastSavedEpochMs = lastSavedEpochMs,
             )
         }.getOrNull()
@@ -56,6 +57,7 @@ class SaveRepository(context: Context) {
             .put("prestigeCores", state.prestigeCores)
             .put("eventRewardBoosts", state.eventRewardBoosts)
             .put("adBoostUntilEpochMs", state.adBoostUntilEpochMs)
+            .put("selectedPlanetSkinId", state.selectedPlanetSkinId)
             .put("lastSavedEpochMs", state.lastSavedEpochMs)
 
         state.activeEventIndex?.let { json.put("activeEventIndex", it) }

@@ -18,6 +18,8 @@ enum class RewardedPlacement(val label: String) {
     EVENT_REWARD("이벤트 2배"),
     RESTORE_SPEED("복원 가속"),
     FREE_CHEST("무료 상자"),
+    TRAVEL_SUPPLY("항로 보급"),
+    ENCOUNTER_CLAIM("조우 보상"),
 }
 
 class AdsController(private val activity: Activity) {
@@ -112,6 +114,8 @@ class AdsController(private val activity: Activity) {
             RewardedPlacement.EVENT_REWARD -> R.string.admob_rewarded_event_reward
             RewardedPlacement.RESTORE_SPEED -> R.string.admob_rewarded_restore_speed
             RewardedPlacement.FREE_CHEST -> R.string.admob_rewarded_free_chest
+            RewardedPlacement.TRAVEL_SUPPLY -> R.string.admob_rewarded_travel_supply
+            RewardedPlacement.ENCOUNTER_CLAIM -> R.string.admob_rewarded_encounter_claim
         }
         return activity.getString(resId)
     }

@@ -9,4 +9,6 @@
     <string name="admob_rewarded_event_reward">ca-app-pub-4402708884038037/1152951090</string>
     <string name="admob_rewarded_restore_speed">ca-app-pub-4402708884038037/6157865769</string>
     <string name="admob_rewarded_free_chest">ca-app-pub-4402708884038037/4844784094</string>
+    <string name="admob_rewarded_travel_supply">ca-app-pub-4402708884038037/9476869104</string>
+    <string name="admob_rewarded_encounter_claim">ca-app-pub-4402708884038037/5727371953</string>
 </resources>
